@@ -42,7 +42,7 @@ export default function ClientLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="pocetna"
         options={{
           title: t('client.tabs.home'),
           tabBarIcon: ({ color, size }) => (

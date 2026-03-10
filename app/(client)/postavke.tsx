@@ -20,6 +20,7 @@ import { Colors } from '../../constants/colors';
 import { FontSize } from '../../constants/typography';
 import { t } from '../../lib/i18n';
 import { useAppStore } from '../../store/useAppStore';
+import { useRouter } from 'expo-router';
 
 // ── Settings row component ────────────────────────────────────────────────────
 
@@ -456,6 +457,7 @@ const aboutStyles = StyleSheet.create({
 // ── Screen ───────────────────────────────────────────────────────────────────
 
 export default function PostavkeScreen() {
+  const router = useRouter();
   const language = useAppStore((s) => s.language);
   const currentUser = useAppStore((s) => s.currentUser);
   const setLanguage = useAppStore((s) => s.setLanguage);
@@ -490,22 +492,23 @@ export default function PostavkeScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Odjava',
-      'Jesi li siguran da se želiš odjaviti?',
-      [
-        { text: 'Ne', style: 'cancel' },
-        {
-          text: 'Da',
-          style: 'destructive',
-          onPress: async () => {
-            await supabase.auth.signOut();
-            logoutUser();
-          },
+  Alert.alert(
+    'Odjava',
+    'Jesi li siguran da se želiš odjaviti?',
+    [
+      { text: 'Ne', style: 'cancel' },
+      {
+        text: 'Da',
+        style: 'destructive',
+        onPress: async () => {
+          await supabase.auth.signOut();
+          logoutUser();
+          router.replace('/');
         },
-      ],
-    );
-  };
+      },
+    ],
+  );
+};
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

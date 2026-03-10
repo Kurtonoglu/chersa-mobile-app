@@ -22,10 +22,10 @@ export default function OnboardingScreen() {
 
   // Redirect once hydration is done and user is confirmed logged in
   useEffect(() => {
-    if (!isHydrating && currentUser.isLoggedIn) {
-      router.replace('/(client)');
-    }
-  }, [isHydrating, currentUser.isLoggedIn]);
+  if (!isHydrating && currentUser.isLoggedIn) {
+    router.replace('/(client)/pocetna');
+  }
+}, [isHydrating, currentUser.isLoggedIn]);
 
   const toggleLanguage = () => {
     setLanguage(language === 'bs' ? 'en' : 'bs');
