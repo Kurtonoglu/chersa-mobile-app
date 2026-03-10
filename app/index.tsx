@@ -19,12 +19,6 @@ export default function OnboardingScreen() {
   const isHydrating = useAppStore((s) => s.isHydrating);
   const language = useAppStore((s) => s.language);
   const setLanguage = useAppStore((s) => s.setLanguage);
-  const loadUserFromStorage = useAppStore((s) => s.loadUserFromStorage);
-
-  // On mount: check AsyncStorage for persisted user, redirect if found
-  useEffect(() => {
-    loadUserFromStorage();
-  }, []);
 
   // Redirect once hydration is done and user is confirmed logged in
   useEffect(() => {

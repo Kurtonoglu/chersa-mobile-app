@@ -17,6 +17,7 @@ import { Colors } from '../../constants/colors';
 import { FontSize } from '../../constants/typography';
 import { t } from '../../lib/i18n';
 import { useAppStore } from '../../store/useAppStore';
+import { loginWithPhone } from '../../services/auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,8 +26,6 @@ interface LoginForm {
   password: string;
 }
 
-const delay = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
-
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function LoginScreen() {
@@ -34,6 +33,7 @@ export default function LoginScreen() {
   const setUser = useAppStore((s) => s.setUser);
 
   const [loading, setLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -43,17 +43,17 @@ export default function LoginScreen() {
     formState: { errors },
   } = useForm<LoginForm>({ defaultValues: { phone: '', password: '' } });
 
-  // ── Submit: validate → save to AsyncStorage + store → navigate ─────────────
-  const onLogin = handleSubmit(async ({ phone, password: _password }) => {
-    // Mock: any phone (9+ digits) + any password (6+ chars) logs in successfully
+  // ── Submit: authenticate via Supabase → store → navigate ───────────────────
+  const onLogin = handleSubmit(async ({ phone, password }) => {
+    setLoginError(null);
     setLoading(true);
-    await delay(500);
-    setUser({
-      name: 'Korisnik',
-      phone: `+387${phone.replace(/\s/g, '')}`,
-      isLoggedIn: true,
-    });
+    const { data, error } = await loginWithPhone(`+387${phone.replace(/\s/g, '')}`, password);
     setLoading(false);
+    if (error || !data) {
+      setLoginError(error ?? 'Login failed. Please try again.');
+      return;
+    }
+    setUser({ name: data.name, phone: data.phone, isLoggedIn: true });
     router.replace('/(client)');
   });
 
@@ -167,6 +167,11 @@ export default function LoginScreen() {
             </View>
             {errors.password && (
               <Text style={styles.errorText}>{errors.password.message}</Text>
+            )}
+
+            {/* General login error */}
+            {loginError && (
+              <Text style={[styles.errorText, styles.loginErrorText]}>{loginError}</Text>
             )}
 
             {/* Login button */}
@@ -344,6 +349,11 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     marginBottom: 12,
     marginLeft: 2,
+  },
+  loginErrorText: {
+    marginTop: 8,
+    textAlign: 'center',
+    marginLeft: 0,
   },
 
   // Buttons

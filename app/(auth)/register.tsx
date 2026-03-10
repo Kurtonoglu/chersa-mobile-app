@@ -17,6 +17,7 @@ import { Colors } from '../../constants/colors';
 import { FontSize } from '../../constants/typography';
 import { t } from '../../lib/i18n';
 import { useAppStore } from '../../store/useAppStore';
+import { registerWithPhone, verifySmsOtp } from '../../services/auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,10 +32,6 @@ interface OtpForm {
   otp: string;
 }
 
-const MOCK_OTP = '1234';
-
-const delay = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
-
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function RegisterScreen() {
@@ -43,6 +40,7 @@ export default function RegisterScreen() {
 
   const [step, setStep] = useState<'form' | 'otp'>('form');
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -61,30 +59,37 @@ export default function RegisterScreen() {
   // OTP form
   const otpForm = useForm<OtpForm>({ defaultValues: { otp: '' } });
 
-  // ── Step 1: validate all fields → show OTP input ───────────────────────────
+  // ── Step 1: validate all fields → send SMS OTP via Supabase ────────────────
   const onSendCode = handleSubmit(async (data) => {
+    setFormError(null);
     setLoading(true);
-    await delay(500);
+    const phone = `+387${data.phone.replace(/\s/g, '')}`;
+    const { error } = await registerWithPhone(data.name, phone, data.password);
     setLoading(false);
+    if (error) {
+      setFormError(error);
+      return;
+    }
     setRegistrationData(data);
     setStep('otp');
   });
 
   // ── Step 2: verify OTP and create account ──────────────────────────────────
   const onVerify = otpForm.handleSubmit(async ({ otp }) => {
-    if (otp !== MOCK_OTP) {
-      otpForm.setError('otp', { message: t('auth.validation.otpInvalid') });
+    if (!registrationData) return;
+    const phone = `+387${registrationData.phone.replace(/\s/g, '')}`;
+    setLoading(true);
+    const { error } = await verifySmsOtp(phone, otp);
+    setLoading(false);
+    if (error) {
+      otpForm.setError('otp', { message: error });
       return;
     }
-    if (!registrationData) return;
-    setLoading(true);
-    await delay(500);
     setUser({
       name: registrationData.name,
-      phone: `+387${registrationData.phone.replace(/\s/g, '')}`,
+      phone,
       isLoggedIn: true,
     });
-    setLoading(false);
     router.replace('/(client)');
   });
 
@@ -282,6 +287,11 @@ export default function RegisterScreen() {
                 <Text style={styles.errorText}>{errors.confirmPassword.message}</Text>
               )}
 
+              {/* General form error */}
+              {formError && (
+                <Text style={[styles.errorText, styles.formErrorText]}>{formError}</Text>
+              )}
+
               {/* Register button */}
               <TouchableOpacity
                 style={[styles.primaryButton, loading && styles.buttonDisabled]}
@@ -325,7 +335,7 @@ export default function RegisterScreen() {
                     placeholder={t('auth.register.otpHint')}
                     placeholderTextColor={Colors.textSecondary}
                     keyboardType="number-pad"
-                    maxLength={4}
+                    maxLength={6}
                     returnKeyType="done"
                     value={value}
                     onChangeText={onChange}
@@ -547,6 +557,11 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     marginBottom: 12,
     marginLeft: 2,
+  },
+  formErrorText: {
+    marginTop: 8,
+    textAlign: 'center',
+    marginLeft: 0,
   },
 
   // Buttons

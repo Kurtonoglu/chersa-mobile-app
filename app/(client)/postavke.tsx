@@ -13,8 +13,8 @@ import {
   Platform,
   Linking,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { FontSize } from '../../constants/typography';
@@ -499,8 +499,8 @@ export default function PostavkeScreen() {
           text: 'Da',
           style: 'destructive',
           onPress: async () => {
+            await supabase.auth.signOut();
             logoutUser();
-            await AsyncStorage.removeItem('@chersa:user');
           },
         },
       ],

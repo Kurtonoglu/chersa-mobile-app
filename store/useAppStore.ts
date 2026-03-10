@@ -87,6 +87,7 @@ interface AppState extends AsyncState {
   // ── Auth actions ────────────────────────────────────────────────────────────
   setUser: (user: CurrentUser) => void;
   logout: () => void;
+  setHydrating: (value: boolean) => void;
   loadUserFromStorage: () => Promise<void>;
 
   // ── Appointment actions ─────────────────────────────────────────────────────
@@ -130,7 +131,7 @@ const uid = (prefix: string) => `${prefix}_${Date.now()}_${++_nextId}`;
 
 export const useAppStore = create<AppState>((set) => ({
   // ── Async state (initial) ───────────────────────────────────────────────────
-  isHydrating: true,
+  isHydrating: false,
   authLoading: false,
   authError: null,
   appointmentsLoading: false,
@@ -139,7 +140,7 @@ export const useAppStore = create<AppState>((set) => ({
   servicesError: null,
 
   // ── Core state (initial) ────────────────────────────────────────────────────
-  currentUser: MOCK_USER,
+  currentUser: { name: '', phone: '', isLoggedIn: false },
   appointments: MOCK_APPOINTMENTS,
   blockedDays: MOCK_BLOCKED_DAYS,
   services: MOCK_SERVICES,
@@ -158,6 +159,8 @@ export const useAppStore = create<AppState>((set) => ({
   clearErrors: () => set({ authError: null, appointmentsError: null, servicesError: null }),
 
   // ── Auth ────────────────────────────────────────────────────────────────────
+  setHydrating: (value) => set({ isHydrating: value }),
+
   setUser: (user) => {
     set({ currentUser: user });
     AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user)).catch(() => null);
