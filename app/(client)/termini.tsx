@@ -108,7 +108,7 @@ function AppointmentCard({ appointment, onCancel }: AppointmentCardProps) {
           </Text>
         </View>
         <Text style={cardStyles.price}>
-          {service ? `${service.price} ${t('common.currency')}` : '—'}
+          {`${appointment.totalPrice ?? service?.price ?? 0} ${t('common.currency')}`}
         </Text>
       </View>
 

@@ -61,7 +61,6 @@ export interface ShopInfo {
   workingDays: number[]; // 1=Mon … 6=Sat (0=Sun closed)
   openTime: string; // 'HH:mm'
   closeTime: string; // 'HH:mm'
-  bufferMinutes: number;
 }
 
 // ─── Shop Info ────────────────────────────────────────────────────────────────
@@ -75,109 +74,7 @@ export const SHOP_INFO: ShopInfo = {
   workingDays: [1, 2, 3, 4, 5, 6], // Mon–Sat
   openTime: '09:00',
   closeTime: '18:00',
-  bufferMinutes: 5,
 };
-
-// ─── Services ─────────────────────────────────────────────────────────────────
-
-export const MOCK_SERVICES: Service[] = [
-  // KOSA
-  {
-    id: 's1',
-    nameBS: 'Šišanje',
-    nameEN: 'Haircut',
-    category: 'kosa',
-    price: 10,
-    duration: 20,
-    active: true,
-  },
-  {
-    id: 's2',
-    nameBS: 'Šišanje za djecu (do 12 godina)',
-    nameEN: "Children's haircut",
-    category: 'kosa',
-    price: 8,
-    duration: 15,
-    active: true,
-  },
-  {
-    id: 's3',
-    nameBS: 'Šišanje na kratko (na nulu, na keca)',
-    nameEN: 'Short haircut',
-    category: 'kosa',
-    price: 8,
-    duration: 15,
-    active: true,
-  },
-  {
-    id: 's4',
-    nameBS: 'Pranje i feniranje kose',
-    nameEN: 'Hair wash and blowdry',
-    category: 'kosa',
-    price: 3,
-    duration: 10,
-    active: true,
-  },
-  // BRADA
-  {
-    id: 's5',
-    nameBS: 'Skraćivanje brade',
-    nameEN: 'Beard trim',
-    category: 'brada',
-    price: 2,
-    duration: 10,
-    active: true,
-  },
-  {
-    id: 's6',
-    nameBS: 'Skraćivanje i oblikovanje brade mašinom',
-    nameEN: 'Beard trim and shape (machine)',
-    category: 'brada',
-    price: 3,
-    duration: 10,
-    active: true,
-  },
-  {
-    id: 's7',
-    nameBS: 'Skraćivanje brade i oblikovanje britvom',
-    nameEN: 'Beard trim and shape (razor)',
-    category: 'brada',
-    price: 5,
-    duration: 15,
-    active: true,
-  },
-  {
-    id: 's8',
-    nameBS: 'DELUXE brada',
-    nameEN: 'DELUXE beard',
-    category: 'brada',
-    price: 8,
-    duration: 20,
-    active: true,
-  },
-  // PAKETI
-  {
-    id: 's9',
-    nameBS: 'Full paket',
-    nameEN: 'Full package',
-    category: 'paketi',
-    price: 20,
-    duration: 45,
-    active: true,
-    description:
-      'Šišanje, skraćivanje i oblikovanje brade, pranje i feniranje, styling',
-  },
-  {
-    id: 's10',
-    nameBS: 'DELUXE paket',
-    nameEN: 'DELUXE package',
-    category: 'paketi',
-    price: 25,
-    duration: 50,
-    active: true,
-    description: 'Šišanje, DELUXE brada, pranje i feniranje 2x, styling',
-  },
-];
 
 // ─── Date helpers (relative to today so mock data always looks current) ──────
 

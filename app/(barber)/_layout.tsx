@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -8,6 +9,12 @@ import { useAppStore } from '../../store/useAppStore';
 export default function BarberLayout() {
   // Subscribe to language so tab labels re-render on language change
   useAppStore((s) => s.language);
+  const fetchServicesFromBackend = useAppStore((s) => s.fetchServicesFromBackend);
+
+  // Load real services so the usluge (services management) screen is populated.
+  useEffect(() => {
+    fetchServicesFromBackend();
+  }, []);
 
   return (
     <Tabs

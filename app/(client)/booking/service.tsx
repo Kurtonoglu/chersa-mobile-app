@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
+  ActivityIndicator,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -9,13 +10,12 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { parseISO, format } from 'date-fns';
+import { parseISO } from 'date-fns';
 import { Colors } from '../../../constants/colors';
 import { FontSize } from '../../../constants/typography';
 import { t } from '../../../lib/i18n';
 import { useAppStore } from '../../../store/useAppStore';
-import { calculateSlots, BookedSlot } from '../../../lib/slotCalculator';
-import { Service, ServiceCategory, SHOP_INFO } from '../../../lib/mockData';
+import { Service, ServiceCategory } from '../../../lib/mockData';
 
 // ── Bosnian date display ─────────────────────────────────────────────────────
 
@@ -41,8 +41,18 @@ export default function BookingServiceScreen() {
 
   const language = useAppStore((s) => s.language);
   const services = useAppStore((s) => s.services);
-  const appointments = useAppStore((s) => s.appointments);
+  const servicesLoading = useAppStore((s) => s.servicesLoading);
+  const servicesError = useAppStore((s) => s.servicesError);
+  const fetchServicesFromBackend = useAppStore((s) => s.fetchServicesFromBackend);
   const setBookingService = useAppStore((s) => s.setBookingService);
+
+  // Defensive fetch: if the layout's fetch hasn't resolved yet (or was missed
+  // via a deep-link), trigger it here so the list isn't permanently blank.
+  useEffect(() => {
+    if (services.length === 0) {
+      fetchServicesFromBackend();
+    }
+  }, []);
 
   const [selectedKosa,  setSelectedKosa]  = React.useState<string | null>(null);
   const [selectedBrada, setSelectedBrada] = React.useState<string | null>(null);
@@ -64,40 +74,6 @@ export default function BookingServiceScreen() {
     }
   };
 
-  // Pre-build the booked slots for this date (exclude cancelled)
-  const bookedSlotsForDate = useMemo<BookedSlot[]>(() => {
-    return appointments
-      .filter((a) => a.date === date && a.status !== 'cancelled')
-      .map((a) => {
-        const svc = services.find((s) => s.id === a.serviceId);
-        return { time: a.time, duration: svc?.duration ?? 0 };
-      });
-  }, [date, appointments, services]);
-
-  // Calculate available slots per service
-  const slotsByService = useMemo<Record<string, string[]>>(() => {
-    const dateObj = date ? parseISO(date) : new Date();
-    const result: Record<string, string[]> = {};
-    for (const svc of services) {
-      if (!svc.active) {
-        result[svc.id] = [];
-        continue;
-      }
-      result[svc.id] = calculateSlots(
-        dateObj,
-        svc.duration,
-        bookedSlotsForDate,
-        SHOP_INFO.bufferMinutes,
-      );
-    }
-    return result;
-  }, [date, services, bookedSlotsForDate]);
-
-  const allNoSlots = useMemo(
-    () => services.every((s) => (slotsByService[s.id] ?? []).length === 0),
-    [services, slotsByService],
-  );
-
   const getServiceName = (svc: Service) =>
     language === 'en' ? svc.nameEN : svc.nameBS;
 
@@ -112,9 +88,6 @@ export default function BookingServiceScreen() {
   const selectedIds = [selectedKosa, selectedBrada, selectedPaket].filter(
     (id): id is string => id !== null,
   );
-  const canProceed =
-    selectedIds.length > 0 &&
-    selectedIds.every((id) => (slotsByService[id] ?? []).length > 0);
 
   const totalPrice = selectedIds.reduce((sum, id) => {
     const svc = services.find((s) => s.id === id);
@@ -125,6 +98,8 @@ export default function BookingServiceScreen() {
     const svc = services.find((s) => s.id === id);
     return sum + (svc?.duration ?? 0);
   }, 0);
+
+  const canProceed = selectedIds.length > 0 && totalDuration > 0;
 
   const handleNext = () => {
     if (!canProceed || !date) return;
@@ -158,169 +133,127 @@ export default function BookingServiceScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      {/* ── No slots at all for this day ──────────────────────── */}
-      {allNoSlots ? (
-        <View style={styles.noSlotsDay}>
-          <Ionicons name="calendar-outline" size={52} color={Colors.border} />
-          <Text style={styles.noSlotsDayTitle}>
-            {t('client.booking.noSlotsForDay')}
+      {servicesLoading ? (
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      ) : services.length === 0 ? (
+        <View style={styles.loadingState}>
+          <Text style={styles.errorText}>
+            {t('client.booking.servicesError')}
           </Text>
-          <TouchableOpacity
-            style={styles.checkOtherDayBtn}
-            onPress={() => router.back()}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.checkOtherDayText}>
-              {t('client.booking.checkOtherDay')}
-            </Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={fetchServicesFromBackend}>
+            <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {CATEGORY_ORDER.map((category) => {
-            const catServices = activeServices.filter((s) => s.category === category);
-            if (catServices.length === 0) return null;
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {CATEGORY_ORDER.map((category) => {
+          const catServices = activeServices.filter((s) => s.category === category);
+          if (catServices.length === 0) return null;
 
-            return (
-              <View key={category} style={styles.categorySection}>
-                {/* Category header */}
-                <View style={styles.categoryHeader}>
-                  <View style={styles.categoryLine} />
-                  <Text style={styles.categoryLabel}>
-                    {getCategoryLabel(category)}
-                  </Text>
-                  <View style={styles.categoryLine} />
-                </View>
-
-                {catServices.map((svc) => {
-                  const slots = slotsByService[svc.id] ?? [];
-                  const hasSlots = slots.length > 0;
-                  const isDisabledByPaket =
-                    paketActive && svc.category !== 'paketi';
-                  const isDisabled = !hasSlots || isDisabledByPaket;
-                  const isSelected =
-                    (svc.category === 'kosa'   && selectedKosa  === svc.id) ||
-                    (svc.category === 'brada'  && selectedBrada === svc.id) ||
-                    (svc.category === 'paketi' && selectedPaket === svc.id);
-
-                  return (
-                    <TouchableOpacity
-                      key={svc.id}
-                      style={[
-                        styles.serviceCard,
-                        isSelected && styles.serviceCardSelected,
-                        isDisabled && styles.serviceCardDimmed,
-                      ]}
-                      onPress={() => {
-                        if (isDisabled) return;
-                        handleSelect(svc);
-                      }}
-                      activeOpacity={isDisabled ? 1 : 0.75}
-                    >
-                      {/* Top row: name + price */}
-                      <View style={styles.serviceRow}>
-                        <Text
-                          style={[
-                            styles.serviceName,
-                            isDisabled && styles.serviceNameDimmed,
-                          ]}
-                          numberOfLines={2}
-                        >
-                          {getServiceName(svc)}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.servicePrice,
-                            isDisabled && styles.servicePriceDimmed,
-                          ]}
-                        >
-                          {svc.price} {t('common.currency')}
-                        </Text>
-                      </View>
-
-                      {/* Bottom row: duration + badge */}
-                      <View style={styles.serviceFooter}>
-                        <View style={styles.durationRow}>
-                          <Ionicons
-                            name="time-outline"
-                            size={13}
-                            color={isDisabled ? Colors.border : Colors.textSecondary}
-                          />
-                          <Text
-                            style={[
-                              styles.durationText,
-                              isDisabled && styles.durationTextDimmed,
-                            ]}
-                          >
-                            {svc.duration} {t('common.minutes')}
-                          </Text>
-                        </View>
-
-                        {!hasSlots && !isDisabledByPaket && (
-                          <View style={styles.noSlotsBadge}>
-                            <Text style={styles.noSlotsBadgeText}>
-                              {t('client.booking.noSlotsLabel')}
-                            </Text>
-                          </View>
-                        )}
-
-                        {isSelected && (
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={20}
-                            color={Colors.accent}
-                          />
-                        )}
-                      </View>
-
-                      {/* Description (packages only) */}
-                      {svc.description != null && !isDisabled && (
-                        <Text style={styles.serviceDescription}>
-                          {svc.description}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+          return (
+            <View key={category} style={styles.categorySection}>
+              {/* Category header */}
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryLine} />
+                <Text style={styles.categoryLabel}>
+                  {getCategoryLabel(category)}
+                </Text>
+                <View style={styles.categoryLine} />
               </View>
-            );
-          })}
-        </ScrollView>
+
+              {catServices.map((svc) => {
+                const isDisabledByPaket = paketActive && svc.category !== 'paketi';
+                const isSelected =
+                  (svc.category === 'kosa'   && selectedKosa  === svc.id) ||
+                  (svc.category === 'brada'  && selectedBrada === svc.id) ||
+                  (svc.category === 'paketi' && selectedPaket === svc.id);
+
+                return (
+                  <TouchableOpacity
+                    key={svc.id}
+                    style={[
+                      styles.serviceCard,
+                      isSelected && styles.serviceCardSelected,
+                      isDisabledByPaket && styles.serviceCardDimmed,
+                    ]}
+                    onPress={() => {
+                      if (isDisabledByPaket) return;
+                      handleSelect(svc);
+                    }}
+                    activeOpacity={isDisabledByPaket ? 1 : 0.75}
+                  >
+                    {/* Top row: name + price */}
+                    <View style={styles.serviceRow}>
+                      <Text style={styles.serviceName} numberOfLines={2}>
+                        {getServiceName(svc)}
+                      </Text>
+                      <Text style={styles.servicePrice}>
+                        {svc.price} {t('common.currency')}
+                      </Text>
+                    </View>
+
+                    {/* Bottom row: duration + checkmark */}
+                    <View style={styles.serviceFooter}>
+                      <View style={styles.durationRow}>
+                        <Ionicons
+                          name="time-outline"
+                          size={13}
+                          color={Colors.textSecondary}
+                        />
+                        <Text style={styles.durationText}>
+                          {svc.duration} {t('common.minutes')}
+                        </Text>
+                      </View>
+
+                      {isSelected && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={20}
+                          color={Colors.accent}
+                        />
+                      )}
+                    </View>
+
+                    {/* Description (packages only) */}
+                    {svc.description != null && (
+                      <Text style={styles.serviceDescription}>
+                        {svc.description}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          );
+        })}
+      </ScrollView>
       )}
 
       {/* ── Footer: Dalje button ──────────────────────────────── */}
-      {!allNoSlots && (
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[
-              styles.nextBtn,
-              !canProceed && styles.nextBtnDisabled,
-            ]}
-            onPress={handleNext}
-            activeOpacity={0.85}
-            disabled={!canProceed}
-          >
-            <Text
-              style={[
-                styles.nextBtnText,
-                !canProceed && styles.nextBtnTextDisabled,
-              ]}
-            >
-              {t('common.next')}
-            </Text>
-            <Ionicons
-              name="arrow-forward"
-              size={18}
-              color={canProceed ? Colors.background : Colors.textSecondary}
-              style={styles.nextBtnIcon}
-            />
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.nextBtn, !canProceed && styles.nextBtnDisabled]}
+          onPress={handleNext}
+          activeOpacity={0.85}
+          disabled={!canProceed}
+        >
+          <Text style={[styles.nextBtnText, !canProceed && styles.nextBtnTextDisabled]}>
+            {t('common.next')}
+          </Text>
+          <Ionicons
+            name="arrow-forward"
+            size={18}
+            color={canProceed ? Colors.background : Colors.textSecondary}
+            style={styles.nextBtnIcon}
+          />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -369,33 +302,30 @@ const styles = StyleSheet.create({
     width: 40,
   },
 
-  // ── No slots for entire day
-  noSlotsDay: {
+  // ── Loading / Error
+  loadingState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
     gap: 16,
   },
-  noSlotsDayTitle: {
+  errorText: {
     color: Colors.textSecondary,
-    fontSize: FontSize.base,
+    fontSize: FontSize.sm,
     textAlign: 'center',
-    lineHeight: 22,
+    paddingHorizontal: 32,
+    lineHeight: 20,
   },
-  checkOtherDayBtn: {
-    height: 48,
-    paddingHorizontal: 28,
+  retryBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
     borderRadius: 10,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: Colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
   },
-  checkOtherDayText: {
+  retryBtnText: {
     color: Colors.accent,
-    fontSize: FontSize.base,
+    fontSize: FontSize.sm,
     fontWeight: '600',
   },
 
@@ -459,18 +389,12 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 21,
   },
-  serviceNameDimmed: {
-    color: Colors.textSecondary,
-  },
   servicePrice: {
     color: Colors.accent,
     fontSize: FontSize.md,
     fontWeight: '700',
     minWidth: 56,
     textAlign: 'right',
-  },
-  servicePriceDimmed: {
-    color: Colors.textSecondary,
   },
   serviceFooter: {
     flexDirection: 'row',
@@ -485,20 +409,6 @@ const styles = StyleSheet.create({
   durationText: {
     color: Colors.textSecondary,
     fontSize: FontSize.sm,
-  },
-  durationTextDimmed: {
-    color: Colors.border,
-  },
-  noSlotsBadge: {
-    backgroundColor: 'rgba(244,67,54,0.15)',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  noSlotsBadgeText: {
-    color: Colors.error,
-    fontSize: FontSize.xs,
-    fontWeight: '600',
   },
   serviceDescription: {
     color: Colors.textSecondary,
@@ -539,7 +449,5 @@ const styles = StyleSheet.create({
   nextBtnTextDisabled: {
     color: Colors.textSecondary,
   },
-  nextBtnIcon: {
-    marginLeft: 8,
-  },
+  nextBtnIcon: { marginLeft: 8 },
 });

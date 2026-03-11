@@ -3,14 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setLocale, Locale } from '../lib/i18n';
 import { supabase } from '../lib/supabase';
 import * as appointmentService from '../services/appointments';
+import * as servicesService from '../services/services';
+import { ActiveBooking } from '../lib/slotCalculator';
 
 const USER_STORAGE_KEY = '@chersa:user';
 import {
-  MOCK_SERVICES,
   MOCK_APPOINTMENTS,
   MOCK_BLOCKED_DAYS,
   MOCK_NOTIFICATIONS,
-  MOCK_USER,
   Service,
   Appointment,
   AppointmentStatus,
@@ -65,6 +65,9 @@ interface AsyncState {
   /** Last appointments error message, or null when clean. */
   appointmentsError: string | null;
 
+  /** True while salon availability is being fetched for a date. */
+  availabilityLoading: boolean;
+
   /** True while services are being fetched or mutated via API. */
   servicesLoading: boolean;
   /** Last services error message, or null when clean. */
@@ -75,6 +78,11 @@ interface AppState extends AsyncState {
   // ── Core state ─────────────────────────────────────────────────────────────
   currentUser: CurrentUser;
   appointments: Appointment[];
+  /**
+   * Salon-wide active bookings for a specific date — used for availability
+   * calculation in the booking flow. Populated by fetchSalonBookingsForDate.
+   */
+  salonBookingsForDate: { date: string; bookings: ActiveBooking[] } | null;
   blockedDays: BlockedDay[];
   services: Service[];
   language: Locale;
@@ -111,7 +119,12 @@ interface AppState extends AsyncState {
   // ── Appointment actions (async / backend) ───────────────────────────────────
   /** Fetch the current user's appointments from Supabase and replace store state. */
   fetchAppointmentsFromBackend: () => Promise<void>;
-  /** Create an appointment in Supabase, then optimistically add it to the store. */
+  /**
+   * Fetch all active salon appointments for a date (bypasses RLS via RPC).
+   * Skips the network call if the cached date already matches.
+   */
+  fetchSalonBookingsForDate: (date: string) => Promise<void>;
+  /** Create an appointment via the safe RPC (server-side overlap check). */
   createAppointmentAsync: (payload: CreateAppointmentPayload) => Promise<{ ok: boolean; error?: string }>;
   /** Cancel an appointment in Supabase, then update store state to reflect it. */
   cancelAppointmentAsync: (id: string) => Promise<{ ok: boolean; error?: string }>;
@@ -127,6 +140,8 @@ interface AppState extends AsyncState {
   setBarberAuthenticated: (value: boolean) => void;
 
   // ── Service actions ─────────────────────────────────────────────────────────
+  /** Fetch services from Supabase and replace store state. */
+  fetchServicesFromBackend: () => Promise<void>;
   toggleServiceActive: (id: string) => void;
   updateService: (id: string, updates: Partial<Omit<Service, 'id'>>) => void;
   addService: (service: Omit<Service, 'id'>) => void;
@@ -156,14 +171,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   authError: null,
   appointmentsLoading: false,
   appointmentsError: null,
+  availabilityLoading: false,
   servicesLoading: false,
   servicesError: null,
 
   // ── Core state (initial) ────────────────────────────────────────────────────
   currentUser: { name: '', phone: '', isLoggedIn: false },
   appointments: MOCK_APPOINTMENTS,
+  salonBookingsForDate: null,
   blockedDays: MOCK_BLOCKED_DAYS,
-  services: MOCK_SERVICES,
+  services: [],
   language: 'bs',
   barberAuthenticated: false,
   notifications: MOCK_NOTIFICATIONS,
@@ -257,40 +274,49 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ appointments: data, appointmentsLoading: false });
   },
 
+  fetchSalonBookingsForDate: async (date) => {
+    // Skip if we already have fresh data for this exact date
+    if (get().salonBookingsForDate?.date === date) return;
+
+    set({ availabilityLoading: true });
+    const { data, error } = await appointmentService.fetchSalonAppointmentsForDate(date);
+    if (error || !data) {
+      // On error, keep previous cache but stop loading — screens still function
+      // with potentially stale data; the backend insert check is the final guard.
+      set({ availabilityLoading: false });
+      return;
+    }
+    set({ salonBookingsForDate: { date, bookings: data }, availabilityLoading: false });
+  },
+
   createAppointmentAsync: async (payload) => {
     const { currentUser } = get();
     set({ appointmentsLoading: true, appointmentsError: null });
 
-    // Resolve user_id from the active Supabase session
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      set({ appointmentsLoading: false, appointmentsError: 'Not authenticated.' });
-      return { ok: false, error: 'Not authenticated.' };
-    }
-
-    const dbPayload: appointmentService.NewDbAppointment = {
-      user_id: user.id,
-      client_name: currentUser.name,
-      client_phone: currentUser.phone,
+    const dbPayload = {
+      client_name:        currentUser.name,
+      client_phone:       currentUser.phone,
       primary_service_id: payload.serviceId,
-      service_ids: payload.serviceIds,
-      date: payload.date,
-      time: payload.time,
-      total_duration: payload.totalDuration,
-      total_price: payload.totalPrice,
-      status: 'confirmed',
+      service_ids:        payload.serviceIds,
+      date:               payload.date,
+      time:               payload.time,
+      total_duration:     payload.totalDuration,
+      total_price:        payload.totalPrice,
     };
 
-    const { data, error } = await appointmentService.createAppointment(dbPayload);
+    // Uses the safe RPC which performs a server-side overlap check before inserting
+    const { data, error } = await appointmentService.createAppointmentSafe(dbPayload);
     if (error || !data) {
       const msg = error ?? 'Booking failed.';
       set({ appointmentsLoading: false, appointmentsError: msg });
       return { ok: false, error: msg };
     }
 
-    // Append the new appointment to the local list optimistically
+    // Append new appointment to user's list and invalidate the salon cache
+    // so the next availability fetch reflects the new booking.
     set((state) => ({
       appointments: [...state.appointments, data],
+      salonBookingsForDate: null,
       appointmentsLoading: false,
     }));
     return { ok: true };
@@ -341,6 +367,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   setBarberAuthenticated: (value) => set({ barberAuthenticated: value }),
 
   // ── Services ─────────────────────────────────────────────────────────────────
+  fetchServicesFromBackend: async () => {
+    set({ servicesLoading: true, servicesError: null });
+    const { data, error } = await servicesService.fetchServices();
+    if (error || !data) {
+      set({ servicesLoading: false, servicesError: error ?? 'Unknown error.' });
+      return;
+    }
+    set({ services: data, servicesLoading: false });
+  },
+
   toggleServiceActive: (id) =>
     set((state) => ({
       services: state.services.map((s) =>

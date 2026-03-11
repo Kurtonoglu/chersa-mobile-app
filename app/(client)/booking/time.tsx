@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,7 +15,7 @@ import { Colors } from '../../../constants/colors';
 import { FontSize } from '../../../constants/typography';
 import { t } from '../../../lib/i18n';
 import { useAppStore } from '../../../store/useAppStore';
-import { calculateSlots, BookedSlot } from '../../../lib/slotCalculator';
+import { calculateAvailableSlots } from '../../../lib/slotCalculator';
 import { SHOP_INFO } from '../../../lib/mockData';
 
 // ── Bosnian date/service display ─────────────────────────────────────────────
@@ -43,15 +44,16 @@ export default function BookingTimeScreen() {
 
   const language = useAppStore((s) => s.language);
   const services = useAppStore((s) => s.services);
-  const appointments = useAppStore((s) => s.appointments);
+  const salonBookingsForDate = useAppStore((s) => s.salonBookingsForDate);
+  const availabilityLoading = useAppStore((s) => s.availabilityLoading);
+  const fetchSalonBookingsForDate = useAppStore((s) => s.fetchSalonBookingsForDate);
   const setBookingTime = useAppStore((s) => s.setBookingTime);
-  const fetchAppointmentsFromBackend = useAppStore((s) => s.fetchAppointmentsFromBackend);
 
-  // Ensure slots reflect actual backend bookings — the layout primes the store
-  // on login, but a direct refresh or deep-link could bypass it.
+  // Re-fetch salon availability when this screen mounts — ensures the slot grid
+  // reflects any bookings made since the service screen was shown.
   useEffect(() => {
-    fetchAppointmentsFromBackend();
-  }, []);
+    if (date) fetchSalonBookingsForDate(date);
+  }, [date]);
 
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
@@ -71,31 +73,25 @@ export default function BookingTimeScreen() {
       .join(' + ');
   }, [serviceIds, serviceId, services, language]);
 
-  // Booked slots for this date (exclude cancelled).
-  // Prefer totalDuration from the appointment (supports multi-service bookings)
-  // and fall back to the primary service duration for legacy/mock data.
-  const bookedSlots = useMemo<BookedSlot[]>(() => {
-    return appointments
-      .filter((a) => a.date === date && a.status !== 'cancelled')
-      .map((a) => {
-        const svc = services.find((s) => s.id === a.serviceId);
-        const duration = a.totalDuration ?? svc?.duration ?? 0;
-        return { time: a.time, duration };
-      });
-  }, [date, appointments, services]);
-
   const duration = totalDuration ? Number(totalDuration) : (service?.duration ?? 0);
 
-  // Available slots based on total selected service duration
+  // Salon-wide active bookings for this date (from the SECURITY DEFINER RPC)
+  const salonBookings = useMemo(
+    () =>
+      salonBookingsForDate?.date === date ? salonBookingsForDate.bookings : [],
+    [salonBookingsForDate, date],
+  );
+
+  // Available intervals based on total selected service duration
   const availableSlots = useMemo<string[]>(() => {
     if (!duration || !date) return [];
-    return calculateSlots(
-      parseISO(date),
+    return calculateAvailableSlots(
+      SHOP_INFO.openTime,
+      SHOP_INFO.closeTime,
       duration,
-      bookedSlots,
-      SHOP_INFO.bufferMinutes,
+      salonBookings,
     );
-  }, [duration, date, bookedSlots]);
+  }, [duration, date, salonBookings]);
 
   const subtitle =
     date && stripName
@@ -135,7 +131,12 @@ export default function BookingTimeScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      {availableSlots.length === 0 ? (
+      {availabilityLoading ? (
+        /* ── Loading availability ─────────────────────────────── */
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      ) : availableSlots.length === 0 ? (
         /* ── No slots empty state ─────────────────────────────── */
         <View style={styles.emptyState}>
           <Ionicons name="time-outline" size={52} color={Colors.border} />
@@ -228,7 +229,7 @@ export default function BookingTimeScreen() {
       )}
 
       {/* ── Footer: Dalje button ──────────────────────────────── */}
-      {availableSlots.length > 0 && (
+      {!availabilityLoading && availableSlots.length > 0 && (
         <View style={styles.footer}>
           <TouchableOpacity
             style={[styles.nextBtn, !selectedTime && styles.nextBtnDisabled]}

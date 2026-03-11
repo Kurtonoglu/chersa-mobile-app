@@ -565,7 +565,7 @@ export default function RezervacijeScreen() {
             <AptCard
               appointment={item}
               serviceName={svc?.nameBS ?? '—'}
-              servicePrice={svc?.price ?? 0}
+              servicePrice={item.totalPrice ?? svc?.price ?? 0}
               onCancel={() => handleCancel(item.id)}
             />
           );

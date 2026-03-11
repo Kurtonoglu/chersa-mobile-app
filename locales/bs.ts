@@ -19,6 +19,7 @@ export const bs = {
     viber: 'Viber',
     minutes: 'min',
     currency: 'KM',
+    retry: 'Pokušaj ponovo',
   },
   onboarding: {
     login: 'Prijavi se',
@@ -99,6 +100,7 @@ export const bs = {
       noSlotsForService: 'Nema slobodnih termina za odabranu uslugu ovaj dan.',
       noSlotsForDay: 'Nema slobodnih termina za ovaj dan.',
       checkOtherDay: 'Provjeri drugi dan',
+      servicesError: 'Nije moguće učitati usluge. Provjeri internet vezu.',
       categories: {
         kosa: 'KOSA',
         brada: 'BRADA',

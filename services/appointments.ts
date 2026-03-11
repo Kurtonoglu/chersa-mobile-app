@@ -2,11 +2,14 @@
  * services/appointments.ts — Appointments service backed by Supabase.
  *
  * All functions return { data, error } matching the ServiceResult<T> pattern.
- * RLS on the `appointments` table ensures each user only sees their own rows.
+ * RLS on the `appointments` table ensures each user only sees their own rows
+ * for direct table queries. RPCs marked SECURITY DEFINER bypass RLS where
+ * needed (availability checks, safe insert).
  */
 
 import { supabase } from '../lib/supabase';
 import { Appointment, AppointmentStatus } from '../lib/mockData';
+import { ActiveBooking } from '../lib/slotCalculator';
 import { ServiceResult } from './auth';
 
 // ─── DB-level types ───────────────────────────────────────────────────────────
@@ -22,7 +25,7 @@ export interface DbAppointment {
   /** All selected service IDs stored as a Postgres TEXT[] array. */
   service_ids: string[];
   date: string;           // 'yyyy-MM-dd'
-  time: string;           // 'HH:mm'
+  time: string;           // 'HH:mm' (Postgres may return 'HH:mm:ss' — first 5 chars used)
   total_duration: number; // sum of all selected service durations
   total_price: number;    // sum of all selected service prices
   status: AppointmentStatus;
@@ -43,7 +46,7 @@ function dbToAppointment(db: DbAppointment): Appointment {
     serviceId: db.primary_service_id,
     serviceIds: db.service_ids,
     date: db.date,
-    time: db.time,
+    time: db.time.slice(0, 5), // normalise 'HH:mm:ss' → 'HH:mm'
     status: db.status,
     totalDuration: db.total_duration,
     totalPrice: db.total_price,
@@ -51,7 +54,7 @@ function dbToAppointment(db: DbAppointment): Appointment {
   };
 }
 
-// ─── Functions ───────────────────────────────────────────────────────────────
+// ─── Functions ────────────────────────────────────────────────────────────────
 
 /**
  * Fetch all appointments for the currently authenticated user,
@@ -73,20 +76,62 @@ export async function fetchAppointments(): Promise<ServiceResult<Appointment[]>>
 }
 
 /**
- * Create a new appointment row.
- * Returns the created appointment with its server-assigned id and created_at.
+ * Fetch all active (non-cancelled) appointments for a given date across the
+ * entire salon — used for availability calculation.
+ *
+ * Uses the `get_active_appointments_for_date` RPC (SECURITY DEFINER) which
+ * bypasses per-user RLS and returns only time + duration (no PII).
  */
-export async function createAppointment(
-  payload: NewDbAppointment,
-): Promise<ServiceResult<Appointment>> {
-  const { data, error } = await supabase
-    .from('appointments')
-    .insert(payload)
-    .select()
-    .single();
+export async function fetchSalonAppointmentsForDate(
+  date: string,
+): Promise<ServiceResult<ActiveBooking[]>> {
+  const { data, error } = await supabase.rpc('get_active_appointments_for_date', {
+    p_date: date,
+  });
 
   if (error) return { data: null, error: error.message };
-  return { data: dbToAppointment(data as DbAppointment), error: null };
+
+  const rows = (data ?? []) as Array<{ appt_time: string; total_duration: number }>;
+  return {
+    data: rows.map((r) => ({
+      time: r.appt_time.slice(0, 5),
+      duration: r.total_duration,
+    })),
+    error: null,
+  };
+}
+
+/**
+ * Create a new appointment using the `book_appointment_safe` RPC.
+ *
+ * The RPC (SECURITY DEFINER) performs a server-side overlap check before
+ * inserting, preventing double-bookings in race conditions. It enforces
+ * `user_id = auth.uid()` internally.
+ *
+ * Returns `{ error: "message" }` in the JSON payload when the slot is taken.
+ */
+export async function createAppointmentSafe(
+  payload: Omit<NewDbAppointment, 'user_id' | 'status'>,
+): Promise<ServiceResult<Appointment>> {
+  const { data, error } = await supabase.rpc('book_appointment_safe', {
+    p_client_name:        payload.client_name,
+    p_client_phone:       payload.client_phone,
+    p_primary_service_id: payload.primary_service_id,
+    p_service_ids:        payload.service_ids,
+    p_date:               payload.date,
+    p_time:               payload.time,
+    p_total_duration:     payload.total_duration,
+    p_total_price:        payload.total_price,
+  });
+
+  if (error) return { data: null, error: error.message };
+
+  const result = data as { data?: DbAppointment; error?: string } | null;
+  if (!result) return { data: null, error: 'No response from server.' };
+  if (result.error) return { data: null, error: result.error };
+  if (!result.data) return { data: null, error: 'Booking failed — no data returned.' };
+
+  return { data: dbToAppointment(result.data), error: null };
 }
 
 /**

@@ -19,6 +19,7 @@ export const en = {
     viber: 'Viber',
     minutes: 'min',
     currency: 'KM',
+    retry: 'Try again',
   },
   onboarding: {
     login: 'Log in',
@@ -99,6 +100,7 @@ export const en = {
       noSlotsForService: 'No available slots for the selected service on this date.',
       noSlotsForDay: 'No available slots for this day.',
       checkOtherDay: 'Check another day',
+      servicesError: 'Could not load services. Check your internet connection.',
       categories: {
         kosa: 'HAIR',
         brada: 'BEARD',
