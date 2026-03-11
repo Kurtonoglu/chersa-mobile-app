@@ -111,7 +111,7 @@ export default function BookingConfirmScreen() {
   const language = useAppStore((s) => s.language);
   const services = useAppStore((s) => s.services);
   const currentUser = useAppStore((s) => s.currentUser);
-  const addAppointment = useAppStore((s) => s.addAppointment);
+  const createAppointmentAsync = useAppStore((s) => s.createAppointmentAsync);
   const clearBookingSelection = useAppStore((s) => s.clearBookingSelection);
 
   useAppStore((s) => s.language); // subscribe for re-renders
@@ -136,19 +136,29 @@ export default function BookingConfirmScreen() {
 
   const formattedDate = date ? formatDateBS(date) : '';
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!date || !serviceId || !time || !service || confirmed) return;
 
     setConfirmed(true);
 
-    addAppointment({
-      clientName: currentUser.name,
-      clientPhone: currentUser.phone || '',
+    const ids = serviceIds ? serviceIds.split(',') : [serviceId];
+    const result = await createAppointmentAsync({
       serviceId,
+      serviceIds: ids,
       date,
       time,
-      status: 'pending',
+      totalDuration: totalDuration ? Number(totalDuration) : service.duration,
+      totalPrice: totalPrice ? Number(totalPrice) : service.price,
     });
+
+    if (!result.ok) {
+      setConfirmed(false);
+      Alert.alert(
+        'Greška',
+        result.error || 'Rezervacija nije uspjela. Pokušaj ponovo.',
+      );
+      return;
+    }
 
     clearBookingSelection();
 
@@ -260,7 +270,7 @@ export default function BookingConfirmScreen() {
         <View style={styles.statusNote}>
           <Ionicons name="information-circle-outline" size={16} color={Colors.textSecondary} />
           <Text style={styles.statusNoteText}>
-            Rezervacija će biti na čekanju dok je frizer ne potvrdi.
+            Rezervacija će biti automatski potvrđena.
           </Text>
         </View>
       </ScrollView>

@@ -20,13 +20,11 @@ import { Appointment } from '../../lib/mockData';
 
 const STATUS_COLOR: Record<string, string> = {
   confirmed: Colors.success,
-  pending: Colors.warning,
   cancelled: Colors.error,
 };
 
 const STATUS_LABEL: Record<string, string> = {
   confirmed: 'status.confirmed',
-  pending: 'status.pending',
   cancelled: 'status.cancelled',
 };
 
@@ -60,7 +58,6 @@ interface AppointmentCardProps {
   appointment: Appointment;
   serviceName: string;
   serviceDuration: number;
-  onConfirm: () => void;
   onCancel: () => void;
 }
 
@@ -68,7 +65,6 @@ function AppointmentCard({
   appointment,
   serviceName,
   serviceDuration,
-  onConfirm,
   onCancel,
 }: AppointmentCardProps) {
   const isCancelled = appointment.status === 'cancelled';
@@ -93,15 +89,6 @@ function AppointmentCard({
         {/* Actions */}
         {!isCancelled && (
           <View style={card.actionsRow}>
-            {appointment.status !== 'confirmed' && (
-              <TouchableOpacity
-                style={card.confirmBtn}
-                onPress={onConfirm}
-                activeOpacity={0.8}
-              >
-                <Text style={card.confirmBtnText}>{t('barber.dashboard.confirmBtn')}</Text>
-              </TouchableOpacity>
-            )}
             <TouchableOpacity
               style={card.cancelBtn}
               onPress={onCancel}
@@ -170,19 +157,6 @@ const card = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  confirmBtn: {
-    flex: 1,
-    height: 36,
-    backgroundColor: Colors.accent,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmBtnText: {
-    color: Colors.background,
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-  },
   cancelBtn: {
     flex: 1,
     height: 36,
@@ -248,7 +222,6 @@ export default function DashboardScreen() {
   const language = useAppStore((s) => s.language);
   const appointments = useAppStore((s) => s.appointments);
   const services = useAppStore((s) => s.services);
-  const confirmAppointment = useAppStore((s) => s.confirmAppointment);
   const cancelAppointment = useAppStore((s) => s.cancelAppointment);
 
   // Today's date string for comparison
@@ -270,18 +243,6 @@ export default function DashboardScreen() {
     }, 0);
 
   const getService = (id: string) => services.find((s) => s.id === id);
-
-  const handleConfirm = (id: string) => {
-    confirm(
-      t('barber.dashboard.confirmTitle'),
-      t('barber.dashboard.confirmMessage'),
-      {
-        cancelText: t('common.cancel'),
-        confirmText: t('common.confirm'),
-        onConfirm: () => confirmAppointment(id),
-      },
-    );
-  };
 
   const handleCancel = (id: string) => {
     confirm(
@@ -347,7 +308,6 @@ export default function DashboardScreen() {
                 appointment={apt}
                 serviceName={svc?.nameBS ?? '—'}
                 serviceDuration={svc?.duration ?? 0}
-                onConfirm={() => handleConfirm(apt.id)}
                 onCancel={() => handleCancel(apt.id)}
               />
             );

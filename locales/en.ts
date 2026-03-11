@@ -194,7 +194,6 @@ export const en = {
       title: 'Bookings',
       all: 'All',
       confirmed: 'Confirmed',
-      pending: 'Pending',
       cancelled: 'Cancelled',
       addNew: 'New booking',
       clientName: 'Client name',
@@ -252,7 +251,6 @@ export const en = {
   },
   status: {
     confirmed: 'Confirmed',
-    pending: 'Pending',
     cancelled: 'Cancelled',
   },
   mockNotifications: {

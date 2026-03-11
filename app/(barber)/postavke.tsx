@@ -129,7 +129,7 @@ export default function BarberPostavkeScreen() {
         destructive: true,
         onConfirm: () => {
           setBarberAuthenticated(false);
-          router.replace('/(client)');
+          router.replace('/(client)/pocetna');
         },
       },
     );

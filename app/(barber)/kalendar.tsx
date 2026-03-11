@@ -33,13 +33,11 @@ import { Appointment } from '../../lib/mockData';
 
 const STATUS_COLOR: Record<string, string> = {
   confirmed: Colors.success,
-  pending: Colors.warning,
   cancelled: Colors.error,
 };
 
 const STATUS_LABEL: Record<string, string> = {
   confirmed: 'status.confirmed',
-  pending: 'status.pending',
   cancelled: 'status.cancelled',
 };
 

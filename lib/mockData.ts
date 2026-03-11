@@ -3,7 +3,7 @@ import { addDays, format } from 'date-fns';
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type ServiceCategory = 'kosa' | 'brada' | 'paketi';
-export type AppointmentStatus = 'confirmed' | 'pending' | 'cancelled';
+export type AppointmentStatus = 'confirmed' | 'cancelled';
 
 export interface Service {
   id: string;
@@ -25,6 +25,10 @@ export interface Appointment {
   time: string; // 'HH:mm'
   status: AppointmentStatus;
   createdAt: string; // ISO string
+  // Optional — populated when loading from the backend (multi-service support)
+  serviceIds?: string[];
+  totalDuration?: number;
+  totalPrice?: number;
 }
 
 export interface BlockedDay {

@@ -12,12 +12,22 @@ export default function ClientLayout() {
   // Subscribe to language so tab labels re-render on language change
   useAppStore((s) => s.language);
   const isLoggedIn = useAppStore((s) => s.currentUser.isLoggedIn);
+  const fetchAppointmentsFromBackend = useAppStore((s) => s.fetchAppointmentsFromBackend);
 
   // When the user logs out, navigate to the landing screen.
   // useEffect avoids a render-time redirect that causes infinite re-render loops.
   useEffect(() => {
     if (!isLoggedIn) {
       router.replace('/');
+    }
+  }, [isLoggedIn]);
+
+  // Prime the appointments store as soon as the user enters the client area.
+  // This ensures both termini.tsx and booking/time.tsx have fresh data from
+  // a cold start, without each screen having to independently trigger a fetch.
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchAppointmentsFromBackend();
     }
   }, [isLoggedIn]);
 

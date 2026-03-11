@@ -4,7 +4,7 @@ import { Colors } from '../../constants/colors';
 import { FontFamily, FontSize } from '../../constants/typography';
 
 // Matches AppointmentStatus from mockData
-export type BadgeStatus = 'confirmed' | 'pending' | 'cancelled';
+export type BadgeStatus = 'confirmed' | 'cancelled';
 
 interface StatusBadgeProps {
   status: BadgeStatus;
@@ -19,19 +19,16 @@ interface CountBadgeProps {
 
 const statusBackground: Record<BadgeStatus, string> = {
   confirmed: `${Colors.success}22`, // 13% alpha
-  pending: `${Colors.warning}22`,
   cancelled: `${Colors.error}22`,
 };
 
 const statusBorder: Record<BadgeStatus, string> = {
   confirmed: `${Colors.success}66`, // 40% alpha
-  pending: `${Colors.warning}66`,
   cancelled: `${Colors.error}66`,
 };
 
 const statusText: Record<BadgeStatus, string> = {
   confirmed: Colors.success,
-  pending: Colors.warning,
   cancelled: Colors.error,
 };
 

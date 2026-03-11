@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { confirm } from '../../lib/alert';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,7 +34,6 @@ const formatAppointmentDate = (dateStr: string): string => {
 
 const STATUS_CONFIG: Record<AppointmentStatus, { bg: string; text: string }> = {
   confirmed: { bg: 'rgba(76,175,80,0.15)', text: Colors.success },
-  pending:   { bg: 'rgba(255,193,7,0.15)',  text: Colors.warning },
   cancelled: { bg: 'rgba(244,67,54,0.15)', text: Colors.error },
 };
 
@@ -239,7 +239,15 @@ export default function TerminiScreen() {
   useAppStore((s) => s.language);
   const appointments = useAppStore((s) => s.appointments);
   const currentUser = useAppStore((s) => s.currentUser);
-  const cancelAppointment = useAppStore((s) => s.cancelAppointment);
+  const cancelAppointmentAsync = useAppStore((s) => s.cancelAppointmentAsync);
+  const fetchAppointmentsFromBackend = useAppStore((s) => s.fetchAppointmentsFromBackend);
+  const appointmentsLoading = useAppStore((s) => s.appointmentsLoading);
+  const appointmentsError = useAppStore((s) => s.appointmentsError);
+
+  // Load the user's appointments from Supabase on first render
+  useEffect(() => {
+    fetchAppointmentsFromBackend();
+  }, []);
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -261,7 +269,7 @@ export default function TerminiScreen() {
         cancelText: t('common.no'),
         confirmText: t('common.yes'),
         destructive: true,
-        onConfirm: () => cancelAppointment(appt.id),
+        onConfirm: () => { cancelAppointmentAsync(appt.id); },
       },
     );
   };
@@ -274,7 +282,18 @@ export default function TerminiScreen() {
       </View>
 
       {/* ── Content ───────────────────────────────────────────── */}
-      {upcoming.length === 0 ? (
+      {appointmentsLoading ? (
+        <View style={styles.centerState}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      ) : appointmentsError ? (
+        <View style={styles.centerState}>
+          <Text style={styles.errorText}>{appointmentsError}</Text>
+          <TouchableOpacity onPress={fetchAppointmentsFromBackend} style={styles.retryBtn}>
+            <Text style={styles.retryBtnText}>Pokušaj ponovo</Text>
+          </TouchableOpacity>
+        </View>
+      ) : upcoming.length === 0 ? (
         <EmptyState />
       ) : (
         <ScrollView
@@ -320,5 +339,33 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+  },
+
+  // ── Loading / error center states
+  centerState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: 32,
+  },
+  errorText: {
+    color: Colors.error,
+    fontSize: FontSize.base,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    height: 44,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryBtnText: {
+    color: Colors.accent,
+    fontSize: FontSize.base,
+    fontWeight: '600',
   },
 });

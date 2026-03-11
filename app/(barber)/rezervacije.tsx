@@ -29,13 +29,11 @@ type FilterType = 'all' | AppointmentStatus;
 
 const STATUS_COLOR: Record<string, string> = {
   confirmed: Colors.success,
-  pending: Colors.warning,
   cancelled: Colors.error,
 };
 
 const STATUS_LABEL: Record<string, string> = {
   confirmed: 'status.confirmed',
-  pending: 'status.pending',
   cancelled: 'status.cancelled',
 };
 
@@ -64,7 +62,7 @@ function AptCard({ appointment, serviceName, servicePrice, onCancel }: AptCardPr
         </View>
         <View style={[aptCard.statusBadge, { backgroundColor: `${statusColor}22` }]}>
           <Text style={[aptCard.statusText, { color: statusColor }]}>
-            {t(STATUS_LABEL[appointment.status] ?? 'status.pending')}
+            {t(STATUS_LABEL[appointment.status] ?? 'status.confirmed')}
           </Text>
         </View>
       </View>
@@ -475,7 +473,6 @@ const wm = StyleSheet.create({
 const FILTERS: { key: FilterType; label: string }[] = [
   { key: 'all', label: 'barber.rezervacije.all' },
   { key: 'confirmed', label: 'barber.rezervacije.confirmed' },
-  { key: 'pending', label: 'barber.rezervacije.pending' },
   { key: 'cancelled', label: 'barber.rezervacije.cancelled' },
 ];
 

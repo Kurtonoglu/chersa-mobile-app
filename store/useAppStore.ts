@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setLocale, Locale } from '../lib/i18n';
+import { supabase } from '../lib/supabase';
+import * as appointmentService from '../services/appointments';
 
 const USER_STORAGE_KEY = '@chersa:user';
 import {
@@ -28,6 +30,16 @@ interface BookingSelection {
   date: string | null;       // 'yyyy-MM-dd'
   serviceId: string | null;
   time: string | null;       // 'HH:mm'
+}
+
+/** Payload passed to createAppointmentAsync — mirrors what confirm.tsx receives from URL params. */
+export interface CreateAppointmentPayload {
+  serviceId: string;
+  serviceIds: string[];
+  date: string;
+  time: string;
+  totalDuration: number;
+  totalPrice: number;
 }
 
 /**
@@ -90,11 +102,19 @@ interface AppState extends AsyncState {
   setHydrating: (value: boolean) => void;
   loadUserFromStorage: () => Promise<void>;
 
-  // ── Appointment actions ─────────────────────────────────────────────────────
+  // ── Appointment actions (sync) ──────────────────────────────────────────────
   addAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => void;
   cancelAppointment: (id: string) => void;
   confirmAppointment: (id: string) => void;
   updateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
+
+  // ── Appointment actions (async / backend) ───────────────────────────────────
+  /** Fetch the current user's appointments from Supabase and replace store state. */
+  fetchAppointmentsFromBackend: () => Promise<void>;
+  /** Create an appointment in Supabase, then optimistically add it to the store. */
+  createAppointmentAsync: (payload: CreateAppointmentPayload) => Promise<{ ok: boolean; error?: string }>;
+  /** Cancel an appointment in Supabase, then update store state to reflect it. */
+  cancelAppointmentAsync: (id: string) => Promise<{ ok: boolean; error?: string }>;
 
   // ── Blocked day actions ─────────────────────────────────────────────────────
   blockDay: (date: string, reason?: string) => void;
@@ -129,7 +149,7 @@ const uid = (prefix: string) => `${prefix}_${Date.now()}_${++_nextId}`;
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   // ── Async state (initial) ───────────────────────────────────────────────────
   isHydrating: false,
   authLoading: false,
@@ -224,6 +244,73 @@ export const useAppStore = create<AppState>((set) => ({
         apt.id === id ? { ...apt, status } : apt,
       ),
     })),
+
+  // ── Async / backend appointment actions ──────────────────────────────────────
+
+  fetchAppointmentsFromBackend: async () => {
+    set({ appointmentsLoading: true, appointmentsError: null });
+    const { data, error } = await appointmentService.fetchAppointments();
+    if (error || !data) {
+      set({ appointmentsLoading: false, appointmentsError: error ?? 'Unknown error.' });
+      return;
+    }
+    set({ appointments: data, appointmentsLoading: false });
+  },
+
+  createAppointmentAsync: async (payload) => {
+    const { currentUser } = get();
+    set({ appointmentsLoading: true, appointmentsError: null });
+
+    // Resolve user_id from the active Supabase session
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      set({ appointmentsLoading: false, appointmentsError: 'Not authenticated.' });
+      return { ok: false, error: 'Not authenticated.' };
+    }
+
+    const dbPayload: appointmentService.NewDbAppointment = {
+      user_id: user.id,
+      client_name: currentUser.name,
+      client_phone: currentUser.phone,
+      primary_service_id: payload.serviceId,
+      service_ids: payload.serviceIds,
+      date: payload.date,
+      time: payload.time,
+      total_duration: payload.totalDuration,
+      total_price: payload.totalPrice,
+      status: 'confirmed',
+    };
+
+    const { data, error } = await appointmentService.createAppointment(dbPayload);
+    if (error || !data) {
+      const msg = error ?? 'Booking failed.';
+      set({ appointmentsLoading: false, appointmentsError: msg });
+      return { ok: false, error: msg };
+    }
+
+    // Append the new appointment to the local list optimistically
+    set((state) => ({
+      appointments: [...state.appointments, data],
+      appointmentsLoading: false,
+    }));
+    return { ok: true };
+  },
+
+  cancelAppointmentAsync: async (id) => {
+    set({ appointmentsLoading: true, appointmentsError: null });
+    const { error } = await appointmentService.cancelAppointment(id);
+    if (error) {
+      set({ appointmentsLoading: false, appointmentsError: error });
+      return { ok: false, error };
+    }
+    set((state) => ({
+      appointments: state.appointments.map((apt) =>
+        apt.id === id ? { ...apt, status: 'cancelled' } : apt,
+      ),
+      appointmentsLoading: false,
+    }));
+    return { ok: true };
+  },
 
   // ── Blocked days ────────────────────────────────────────────────────────────
   blockDay: (date, reason = 'Slobodan dan') =>

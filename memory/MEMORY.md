@@ -56,6 +56,15 @@ No backend, no API calls — all data in Zustand + mockData.ts.
 - @expo-google-fonts/inter and expo-font NOT in package.json yet
 - Using system fonts currently, FontFamily constants ready for when installed
 
+## Appointment Backend (Supabase — implemented)
+- `services/appointments.ts` — fully Supabase-backed; exports `DbAppointment`, `NewDbAppointment`
+- `lib/mockData.ts` — `Appointment` type extended with optional `serviceIds?`, `totalDuration?`, `totalPrice?`
+- `store/useAppStore.ts` — imports `supabase` + `appointmentService`; uses `(set, get)` signature; adds `CreateAppointmentPayload` + 3 async actions: `fetchAppointmentsFromBackend`, `createAppointmentAsync`, `cancelAppointmentAsync`
+- `app/(client)/termini.tsx` — fetches from backend on mount; loading/error/retry UI; uses `cancelAppointmentAsync`
+- `app/(client)/booking/confirm.tsx` — uses `createAppointmentAsync`; handles loading + error alert
+- `app/(client)/booking/time.tsx` — bookedSlots use `a.totalDuration ?? svc?.duration` for multi-service support
+- `supabase/appointments.sql` — full SQL: table, indexes, RLS (4 policies), profiles trigger
+
 ## Backend Readiness (pre-backend fixes applied)
 - `index.ts` imports `react-native-url-polyfill/polyfill` as first line
 - `SHOP_INFO.closeTime = '18:00'`, `bufferMinutes = 5`

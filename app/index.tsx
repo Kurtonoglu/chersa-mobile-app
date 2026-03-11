@@ -86,6 +86,15 @@ export default function OnboardingScreen() {
         >
           <Text style={styles.filledButtonText}>{t('onboarding.register')}</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.barberLink}
+          onPress={() => router.push('/(barber)/pin')}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.barberLinkText}>Barber pristup</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -202,6 +211,16 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: FontSize.md,
     fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  barberLink: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  barberLinkText: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.sm,
     letterSpacing: 0.3,
   },
 });

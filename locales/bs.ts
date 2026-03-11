@@ -195,7 +195,6 @@ export const bs = {
       title: 'Rezervacije',
       all: 'Sve',
       confirmed: 'Potvrđeno',
-      pending: 'Na čekanju',
       cancelled: 'Otkazano',
       addNew: 'Nova rezervacija',
       clientName: 'Ime klijenta',
@@ -253,7 +252,6 @@ export const bs = {
   },
   status: {
     confirmed: 'Potvrđeno',
-    pending: 'Na čekanju',
     cancelled: 'Otkazano',
   },
   mockNotifications: {

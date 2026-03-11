@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -45,6 +45,13 @@ export default function BookingTimeScreen() {
   const services = useAppStore((s) => s.services);
   const appointments = useAppStore((s) => s.appointments);
   const setBookingTime = useAppStore((s) => s.setBookingTime);
+  const fetchAppointmentsFromBackend = useAppStore((s) => s.fetchAppointmentsFromBackend);
+
+  // Ensure slots reflect actual backend bookings — the layout primes the store
+  // on login, but a direct refresh or deep-link could bypass it.
+  useEffect(() => {
+    fetchAppointmentsFromBackend();
+  }, []);
 
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
@@ -64,13 +71,16 @@ export default function BookingTimeScreen() {
       .join(' + ');
   }, [serviceIds, serviceId, services, language]);
 
-  // Booked slots for this date (exclude cancelled)
+  // Booked slots for this date (exclude cancelled).
+  // Prefer totalDuration from the appointment (supports multi-service bookings)
+  // and fall back to the primary service duration for legacy/mock data.
   const bookedSlots = useMemo<BookedSlot[]>(() => {
     return appointments
       .filter((a) => a.date === date && a.status !== 'cancelled')
       .map((a) => {
         const svc = services.find((s) => s.id === a.serviceId);
-        return { time: a.time, duration: svc?.duration ?? 0 };
+        const duration = a.totalDuration ?? svc?.duration ?? 0;
+        return { time: a.time, duration };
       });
   }, [date, appointments, services]);
 
